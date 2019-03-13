@@ -2,23 +2,19 @@
 using System.Threading.Tasks;
 using System.Net.Http;
 using Newtonsoft.Json;
-using System.Data.SqlClient;
-using MySql.Data;
 using MySql.Data.MySqlClient;
 using System.Diagnostics;
-using System.Net.Mail;
-using System.Text.RegularExpressions;
 
 namespace RedditCrawler
 {
     class Program
     {
         public static void Main()
-        {            
+        {
             MySql.Data.MySqlClient.MySqlConnection conn;
             string myConnectionString;
-
-            myConnectionString = "server=127.0.0.1;uid=redditcrawler;" +                            // string is used to connect to MySQL
+            // string is used to connect to MySQL
+            myConnectionString = "server=127.0.0.1;uid=redditcrawler;" +
                 "pwd=Lucio420;database=redditcra";
 
             try
@@ -27,49 +23,76 @@ namespace RedditCrawler
                 conn.ConnectionString = myConnectionString;
                 Console.WriteLine("database connection open");
                 conn.Open();
-                string[] subs = {"MuayThai","computerscience","botany" };                   //subreddit subjects crawler will be looking for 
 
-                foreach (string sub in subs)
+
+                string query = "SELECT * FROM subreddit";
+             
+
+                var comm = new MySql.Data.MySqlClient.MySqlCommand(query, conn);
+                var reader = comm.ExecuteReader();
+
+
+                while (reader.Read())
                 {
+                    string[] subs = { reader["name"].ToString() };
+                    Console.WriteLine("\t{0}",
+                    reader[1]);
 
-                    Console.WriteLine(sub);
-                    Task<string> task = getResponse(sub);
-                    dynamic link = JsonConvert.DeserializeObject(task.Result);              // Must deserialize in order to make response readable.
-                    foreach (var d in link.data.children)
+                    foreach (string sub in subs)
                     {
 
-                        var id = d.data.id;
-                        var subject = d.data.subreddit;
-                        var title = d.data.title;
-                        var uLink = d.data.url;
-                        var utc = d.data.created_utc;
-                        var subId = d.data.subreddit_id;
-
-                        var cmd = new MySqlCommand();
-                        cmd.Connection = conn;                                      // used to open connection to MySQL
-
-                        // Parameterized queries - prevents string from breaking off dude to string compromise. 
-                        cmd.CommandText = "INSERT INTO articles(article_id,subject,subid,title) VALUES(?article_id,?subject,?subid,?title)";
-                        cmd.Parameters.Add("?article_id", MySqlDbType.VarChar).Value = id;
-                        cmd.Parameters.Add("?subject", MySqlDbType.VarChar).Value = subject;
-                        cmd.Parameters.Add("?subid", MySqlDbType.VarChar).Value = subId;
-                        cmd.Parameters.Add("?title", MySqlDbType.VarChar).Value = title;
-                        cmd.ExecuteNonQuery();
-
-                        if(title == "new")
+                        Console.WriteLine(sub);
+                        //Asynchronous oporation. This will return request.
+                        Task<string> task = getResponse(sub);
+                        // Must deserialize in order to make response readable.
+                        Console.WriteLine(task.Result);
+                        dynamic link = JsonConvert.DeserializeObject(task.Result);
+                        foreach (var d in link.data.children)
                         {
-                            Console.WriteLine("post" + title);
+
+                            var id = d.data.id;
+                            var subject = d.data.subreddit;
+                            var title = d.data.title;
+                            var subId = d.data.subreddit_id;
+
+                            MySqlConnection connection = new MySqlConnection(myConnectionString);
+                            MySqlCommand cmd;
+                            connection.Open();
+                            cmd = connection.CreateCommand();
+
+                            // Parameterized queries - prevents string from breaking off dude to string compromise. 
+                            cmd.CommandText = "INSERT INTO articles(article_id,subject,subid,title) VALUES(?article_id,?subject,?subid,?title)";
+                            cmd.Parameters.Add("?article_id", MySqlDbType.VarChar).Value = id;
+                            cmd.Parameters.Add("?subject", MySqlDbType.VarChar).Value = subject;
+                            cmd.Parameters.Add("?subid", MySqlDbType.VarChar).Value = subId;
+                            cmd.Parameters.Add("?title", MySqlDbType.VarChar).Value = title;
+                            cmd.ExecuteNonQuery();
+
+                            if (title == "new")
+                            {
+                                Console.WriteLine("post" + title);
+                            }
                         }
                     }
-                }              
+
+                }
+                reader.Close();
+                //subreddit subjects crawler will be looking for
+
+
+
+
             }
             catch (MySqlException ex)
             {
                 Debug.WriteLine(ex.Message);
                 Console.WriteLine(ex.Message);
-            }                  
-        }                                                        // End of Main
+            }
+        }// End of 
 
+
+
+        // This Request for the Http site.
         static async Task<string> getResponse(string sub)
         {
             using (HttpClient client = new HttpClient())
@@ -87,7 +110,7 @@ namespace RedditCrawler
                     return e.Message;
                 }
             }
-        }                                                               // This Method Calls for HTTP link
+        }
     }
 }
 
